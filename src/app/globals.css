@@ -481,19 +481,37 @@ button {
   padding: 1.25rem;
 }
 
-.footer-video-text {
-  color: transparent;
-  background-image:
-    radial-gradient(circle at 18% 38%, rgba(255, 255, 255, 0.9), transparent 13%),
-    radial-gradient(circle at 72% 42%, rgba(182, 138, 69, 0.48), transparent 18%),
-    linear-gradient(115deg, #d8cdbd 0%, #f9f1e6 18%, #cdbb9c 36%, #fdf7ee 52%, #b68a45 68%, #eee2d1 82%, #c2b59f 100%);
-  background-size: 220% 220%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 14px 30px rgb(84 61 35 / 0.12));
-  opacity: 0.78;
-  animation: footerVideoTextFlow 8s ease-in-out infinite;
+.footer-video-title {
+  min-height: clamp(4.75rem, 10vw, 8.5rem);
+}
+
+.footer-video-svg {
+  display: block;
+  width: 100%;
+  height: clamp(4.75rem, 10vw, 8.5rem);
+  filter: drop-shadow(0 16px 30px rgb(84 61 35 / 0.16));
+}
+
+.footer-video-clip-text,
+.footer-video-outline {
+  font-family: var(--font-cormorant), Georgia, "Times New Roman", serif;
+  font-size: 118px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.footer-video-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.2) contrast(1.08) brightness(1.02);
+}
+
+.footer-video-outline {
+  fill: transparent;
+  stroke: rgb(104 78 39 / 0.22);
+  stroke-width: 1.4;
 }
 
 @keyframes brandWaveFlow {
@@ -502,18 +520,6 @@ button {
   }
   to {
     transform: translateX(-50%);
-  }
-}
-
-@keyframes footerVideoTextFlow {
-  0% {
-    background-position: 0% 48%;
-  }
-  50% {
-    background-position: 100% 52%;
-  }
-  100% {
-    background-position: 0% 48%;
   }
 }
 
@@ -653,7 +659,6 @@ button {
 
   .wishlist-burst-ring,
   .wishlist-burst-heart,
-  .footer-video-text,
   .order-progress-fill-once,
   .order-progress-step-done,
   .cart-target-pop {
@@ -670,10 +675,13 @@ button {
     color: #ffffff;
   }
 
-  .footer-video-text {
-    color: #b68a45;
-    background: none;
-    -webkit-text-fill-color: currentColor;
+  .footer-video-media {
+    display: none;
+  }
+
+  .footer-video-outline {
+    fill: #b68a45;
+    stroke: transparent;
   }
 
   .cart-fly-item {

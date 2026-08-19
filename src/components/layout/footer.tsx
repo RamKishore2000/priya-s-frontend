@@ -97,10 +97,30 @@ export function Footer() {
   return (
     <footer className="site-footer relative z-20 border-t border-[#DFCEB9] text-[#243A3B] shadow-[0_-18px_60px_rgba(84,61,35,0.08)]">
       <div className="site-footer-glow pointer-events-none absolute inset-x-0 top-0 h-56" />
-      <div className="relative mx-auto max-w-[96rem] overflow-hidden px-5 pt-10 md:px-8">
-        <p className="footer-video-text select-none text-center font-serif text-[clamp(3rem,10vw,9.5rem)] font-black uppercase leading-none tracking-[0.04em] lg:whitespace-nowrap lg:text-[clamp(4.6rem,7.4vw,8.6rem)] lg:tracking-[0.015em]">
-          Priya&apos;s Aqua Fresh
-        </p>
+      <div className="footer-video-title relative mx-auto max-w-[96rem] overflow-hidden px-5 pt-10 md:px-8" aria-label="Priya's Aqua Fresh">
+        <svg className="footer-video-svg" viewBox="0 0 1650 170" role="img" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <clipPath id="footer-video-title-clip">
+              <text className="footer-video-clip-text" x="825" y="118" textAnchor="middle">
+                Priya&apos;s Aqua Fresh
+              </text>
+            </clipPath>
+          </defs>
+          <foreignObject width="1650" height="170" clipPath="url(#footer-video-title-clip)">
+            <video
+              className="footer-video-media"
+              src="/images/banners/mixkit-water-surface-when-ice-falls-in-slow-motion-51945-hd-ready.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+            />
+          </foreignObject>
+          <text className="footer-video-outline" x="825" y="118" textAnchor="middle">
+            Priya&apos;s Aqua Fresh
+          </text>
+        </svg>
       </div>
       <div className="relative mx-auto grid max-w-7xl gap-10 px-5 py-14 md:grid-cols-[1.2fr_1.4fr] md:px-8">
         <div>
