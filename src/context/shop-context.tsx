@@ -1,0 +1,350 @@
+"use client";
+
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { getStoredUser, loginUser, logoutUser, registerCustomer, type AuthUser } from "@/services/auth-service";
+import {
+  addCartItem,
+  addWishlistItem,
+  fetchCart,
+  fetchWishlist,
+  removeCartItem,
+  removeWishlistItem,
+  updateCartItem,
+  type CartItem,
+  type CartState,
+} from "@/services/shop-service";
+
+type ShopContextValue = {
+  user: AuthUser | null;
+  cartItems: CartItem[];
+  cartCount: number;
+  subtotal: number;
+  wishlistCount: number;
+  wishlistIds: string[];
+  openLogin: () => void;
+  logout: () => void;
+  addToCart: (productId: string, quantity?: number) => Promise<boolean>;
+  removeFromCart: (productId: string) => Promise<void>;
+  increaseQuantity: (productId: string) => Promise<void>;
+  decreaseQuantity: (productId: string) => Promise<void>;
+  toggleWishlist: (productId: string) => Promise<void>;
+  refreshCart: () => Promise<void>;
+  clearCartState: () => void;
+};
+
+const ShopContext = createContext<ShopContextValue | null>(null);
+
+type ToastState = {
+  id: number;
+  title: string;
+  tone: "success" | "error" | "info";
+} | null;
+
+export function ShopProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [cart, setCart] = useState<CartState | null>(null);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [mode, setMode] = useState<"login" | "register" | "otp">("login");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpMobile, setOtpMobile] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState<ToastState>(null);
+
+  function showToast(title: string, tone: "success" | "error" | "info" = "success") {
+    const id = Date.now();
+    setToast({ id, title, tone });
+    window.setTimeout(() => {
+      setToast((current) => (current?.id === id ? null : current));
+    }, 2600);
+  }
+
+  useEffect(() => {
+    const sync = () => {
+      const storedUser = getStoredUser();
+      setUser(storedUser);
+      if (storedUser) {
+        fetchCart().then(setCart).catch(() => undefined);
+        fetchWishlist().then((wishlist) => setWishlistIds(wishlist.productIds.map(String))).catch(() => undefined);
+      }
+    };
+    sync();
+    window.addEventListener("priyas-auth-changed", sync);
+    return () => window.removeEventListener("priyas-auth-changed", sync);
+  }, []);
+
+  const refreshCart = useCallback(async () => {
+    if (!user) return;
+    setCart(await fetchCart());
+  }, [user]);
+
+  async function submitLogin(formData: FormData) {
+    setMessage("");
+    try {
+      if (mode === "otp") {
+        if (!otpSent) {
+          const mobile = otpMobile.trim();
+          if (!/^[6-9][0-9]{9}$/.test(mobile)) {
+            setMessage("Enter a valid 10 digit Indian mobile number.");
+            showToast("Enter a valid 10 digit Indian mobile number.", "error");
+            return;
+          }
+          setOtpSent(true);
+          setMessage("");
+          return;
+        }
+        if (!/^[0-9]{6}$/.test(otpCode.trim())) {
+          setMessage("Enter the 6 digit OTP.");
+          showToast("Enter the 6 digit OTP.", "error");
+          return;
+        }
+        setMessage("OTP verification will be enabled soon.");
+        showToast("OTP verification will be enabled soon.", "info");
+        return;
+      }
+      if (mode === "register") {
+        await registerCustomer({
+          fullName: String(formData.get("fullName") || ""),
+          mobile: String(formData.get("mobile") || ""),
+          email: String(formData.get("email") || ""),
+          password: String(formData.get("password") || ""),
+          confirmPassword: String(formData.get("password") || ""),
+        });
+        setMode("login");
+        setMessage("Account created. Please login now.");
+        showToast("Account created. Please login now.", "success");
+        return;
+      }
+      const loggedInUser = await loginUser({
+        email: String(formData.get("email") || ""),
+        password: String(formData.get("password") || ""),
+      });
+      setUser(loggedInUser);
+      setLoginOpen(false);
+      showToast("Login successful", "success");
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : "Login failed.";
+      setMessage(nextMessage);
+      showToast(nextMessage, "error");
+    }
+  }
+
+  const addToCart = useCallback(async (productId: string, quantity = 1) => {
+    if (!user) {
+      setLoginOpen(true);
+      showToast("Please login to add products to cart.", "info");
+      return false;
+    }
+    try {
+      setCart(await addCartItem(productId, quantity));
+      showToast("Product added to cart", "success");
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to add product", "error");
+      return false;
+    }
+  }, [user]);
+
+  async function removeFromCart(productId: string) {
+    if (!user) return;
+    try {
+      setCart(await removeCartItem(productId));
+      showToast("Cart updated", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Unable to update cart", "error");
+    }
+  }
+
+  async function increaseQuantity(productId: string) {
+    if (!user) return;
+    const current = cart?.items.find((item) => item.product.id === productId);
+    setCart(await updateCartItem(productId, (current?.quantity || 0) + 1));
+    showToast("Cart updated", "success");
+  }
+
+  async function decreaseQuantity(productId: string) {
+    if (!user) return;
+    const current = cart?.items.find((item) => item.product.id === productId);
+    const quantity = Math.max(0, (current?.quantity || 1) - 1);
+    setCart(await updateCartItem(productId, quantity));
+    showToast("Cart updated", "success");
+  }
+
+  async function toggleWishlist(productId: string) {
+    if (!user) {
+      setLoginOpen(true);
+      showToast("Please login to use wishlist.", "info");
+      return;
+    }
+    if (wishlistIds.includes(productId)) {
+      const next = await removeWishlistItem(productId);
+      setWishlistIds(next.productIds.map(String));
+      showToast("Removed from wishlist", "success");
+      return;
+    }
+    const next = await addWishlistItem(productId);
+    setWishlistIds(next.productIds.map(String));
+    showToast("Added to wishlist", "success");
+  }
+
+  const value: ShopContextValue = {
+    user,
+    cartItems: cart?.items || [],
+    cartCount: cart?.count || 0,
+    subtotal: cart?.subtotal || 0,
+    wishlistCount: wishlistIds.length,
+    wishlistIds,
+    openLogin: () => setLoginOpen(true),
+    logout: () => {
+      logoutUser();
+      setUser(null);
+      setCart(null);
+      setWishlistIds([]);
+    },
+    addToCart,
+    removeFromCart,
+    increaseQuantity,
+    decreaseQuantity,
+    toggleWishlist,
+    refreshCart,
+    clearCartState: () => setCart(null),
+  };
+
+  return (
+    <ShopContext.Provider value={value}>
+      {children}
+      {loginOpen ? (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-[#071624]/70 px-5 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[1.35rem] border border-[#E5D8C7] bg-[#FFF9F1] text-[#1D2D2E] shadow-[0_40px_120px_rgba(43,35,22,0.24)]">
+            <div className="h-2 bg-[linear-gradient(90deg,#0A3A38,#12a8e6,#D8B879)]" />
+            <div className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#B68A45]">{mode === "otp" ? "OTP Login" : mode === "login" ? "Login" : "Register"}</p>
+                <h2 className="mt-2 font-serif text-3xl font-semibold text-[#1D2D2E]">Welcome to Priya&apos;s</h2>
+              </div>
+              <button onClick={() => setLoginOpen(false)} className="h-10 w-10 rounded-full border border-[#E5D8C7] bg-white text-[#0A3A38] transition hover:bg-[#F5E9D8]">x</button>
+            </div>
+            <form action={submitLogin} className="mt-6 grid gap-3">
+              {mode === "otp" ? (
+                <>
+                  <div className="rounded-xl border border-[#E5D8C7] bg-white/70 px-4 py-3">
+                    <p className="text-sm font-black text-[#1D2D2E]">Login with OTP</p>
+                    <p className="mt-1 text-xs font-semibold text-[#5A6362]">
+                      {otpSent ? `Enter the 6 digit OTP sent to ${otpMobile}.` : "Use your registered mobile number to continue."}
+                    </p>
+                  </div>
+                  {!otpSent ? (
+                    <input
+                      name="otpMobile"
+                      inputMode="numeric"
+                      maxLength={10}
+                      placeholder="Mobile number"
+                      value={otpMobile}
+                      onChange={(event) => setOtpMobile(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      className="rounded-xl border border-[#E5D8C7] bg-white px-4 py-3 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75]"
+                    />
+                  ) : (
+                    <>
+                      <OtpBoxes value={otpCode} onChange={setOtpCode} />
+                      <div className="flex items-center justify-between text-sm">
+                        <button type="button" className="font-black text-[#0A3A38]" onClick={() => showToast("OTP resend will be enabled soon.", "info")}>Resend OTP</button>
+                        <button type="button" className="font-bold text-[#7D7B75]" onClick={() => { setOtpSent(false); setOtpCode(""); setMessage(""); }}>Change mobile</button>
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  {mode === "register" ? <input name="fullName" placeholder="Full name" className="rounded-xl border border-[#E5D8C7] bg-white px-4 py-3 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75]" /> : null}
+                  {mode === "register" ? <input name="mobile" placeholder="Mobile" className="rounded-xl border border-[#E5D8C7] bg-white px-4 py-3 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75]" /> : null}
+                  <input name="email" placeholder="Email or mobile" className="rounded-xl border border-[#E5D8C7] bg-white px-4 py-3 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75]" />
+                  <input name="password" type="password" placeholder="Password" className="rounded-xl border border-[#E5D8C7] bg-white px-4 py-3 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75]" />
+                </>
+              )}
+              <button className="mt-2 rounded-full bg-[#0A3A38] px-5 py-3 font-black text-white transition hover:bg-[#12383A]">{mode === "otp" ? (otpSent ? "Verify OTP" : "Send OTP") : mode === "login" ? "Login" : "Create Account"}</button>
+            </form>
+            {message ? <p className="mt-4 rounded-lg bg-[#F5E9D8] px-3 py-2 text-sm font-semibold text-[#8A5F23]">{message}</p> : null}
+            <div className="mt-5 grid gap-3 text-sm font-black text-[#0A3A38]">
+              {mode === "login" ? (
+                <button
+                  onClick={() => {
+                    setMode("otp");
+                    setOtpSent(false);
+                    setMessage("");
+                  }}
+                  className="rounded-full border border-[#D8B879] bg-white px-4 py-2 text-center transition hover:bg-[#F5E9D8]"
+                >
+                  Login with OTP
+                </button>
+              ) : null}
+              <button
+                onClick={() => {
+                  setMode(mode === "register" || mode === "otp" ? "login" : "register");
+                  setOtpSent(false);
+                  setMessage("");
+                }}
+              >
+                {mode === "login" ? "Create new account" : "Back to login"}
+              </button>
+            </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {toast ? (
+        <div className="fixed bottom-5 left-1/2 z-[120] w-[min(340px,calc(100vw-2rem))] -translate-x-1/2">
+          <div className={`rounded-xl border bg-white px-4 py-3 text-sm font-black text-[#1D2D2E] shadow-[0_18px_48px_rgba(43,35,22,0.2)] ${toast.tone === "error" ? "border-red-200 border-l-red-500" : toast.tone === "info" ? "border-[#D8B879] border-l-[#B68A45]" : "border-emerald-200 border-l-emerald-500"} border-l-4`}>
+            {toast.title}
+          </div>
+        </div>
+      ) : null}
+    </ShopContext.Provider>
+  );
+}
+
+export function useShop() {
+  const value = useContext(ShopContext);
+  if (!value) throw new Error("useShop must be used inside ShopProvider");
+  return value;
+}
+
+function OtpBoxes({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const digits = value.padEnd(6, " ").slice(0, 6).split("");
+
+  function updateDigit(index: number, nextValue: string) {
+    const digit = nextValue.replace(/\D/g, "").slice(-1);
+    const nextDigits = value.padEnd(6, " ").slice(0, 6).split("");
+    nextDigits[index] = digit || " ";
+    onChange(nextDigits.join("").replace(/\s/g, "").slice(0, 6));
+    if (digit) {
+      const nextInput = document.getElementById(`frontend2-otp-${index + 1}`) as HTMLInputElement | null;
+      nextInput?.focus();
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-6 gap-2">
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          id={`frontend2-otp-${index}`}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={digit.trim()}
+          onChange={(event) => updateDigit(index, event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Backspace" && !digit.trim() && index > 0) {
+              const previousInput = document.getElementById(`frontend2-otp-${index - 1}`) as HTMLInputElement | null;
+              previousInput?.focus();
+            }
+          }}
+          className="h-12 rounded-xl border border-[#E5D8C7] bg-white text-center text-lg font-black text-[#1D2D2E] outline-none transition focus:border-[#0A3A38] focus:ring-2 focus:ring-[#D8B879]/30"
+          aria-label={`OTP digit ${index + 1}`}
+        />
+      ))}
+    </div>
+  );
+}
