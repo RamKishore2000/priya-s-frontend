@@ -4,7 +4,7 @@ import Image from "next/image";
 import Script from "next/script";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { SitePage } from "@/components/layout/site-page";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { useShop } from "@/context/shop-context";
@@ -42,6 +42,26 @@ const emptyAddress: AddressForm = {
 const inputClass = "h-11 rounded-xl border border-[#E5D8C7] bg-white px-4 font-semibold text-[#1D2D2E] outline-none placeholder:text-[#7D7B75] focus:border-[#0A3A38]";
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<CheckoutFallback />}>
+      <CheckoutContent />
+    </Suspense>
+  );
+}
+
+function CheckoutFallback() {
+  return (
+    <SitePage eyebrow="Checkout" title="Confirm your order" description="Select address, apply coupon and place your order.">
+      <section className="px-5 pb-20 md:px-8">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[#E8DCCB] bg-[#FFF9F1] p-10 text-center font-black text-[#5A6362] shadow-[0_10px_30px_rgba(84,61,35,0.06)]">
+          Loading checkout...
+        </div>
+      </section>
+    </SitePage>
+  );
+}
+
+function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const buyNowId = searchParams.get("buyNow");
